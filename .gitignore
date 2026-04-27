@@ -70,6 +70,10 @@ web_modules/
 .env.*
 !.env.example
 
+# FluCore — archivos de entorno específicos por app
+apps/web/.env.local
+apps/api/.env
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache

@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "target": "ES2022",
+    "outDir": "dist",
+    "skipLibCheck": true,
+    "paths": {
+      "@flucore/types": ["../../packages/types/src/index.ts"]
+    }
+  },
+  "include": ["src", "../../packages/types/src"],
+  "exclude": ["node_modules", "dist"]
+}
