@@ -1,0 +1,95 @@
+---
+description: TypeScript/TSX standards for FluCore — naming, patterns, error handling.
+globs: **/*.ts, **/*.tsx
+alwaysApply: false
+---
+
+# FluCore — Convenciones TypeScript
+
+## Configuración base
+
+```json
+{ "strict": true, "noImplicitAny": true, "noUncheckedIndexedAccess": true }
+```
+
+## Nomenclatura
+
+| Elemento | Convención | Ejemplo |
+|----------|-----------|---------|
+| Archivos TS | `kebab-case` | `ticket.service.ts`, `approve-report.handler.ts` |
+| Interfaces | `PascalCase` | `Ticket`, `CreateTicketDto` |
+| Interfaces de servicio | `IPascalCase` | `ITicketService` |
+| ENUMs | `PascalCase`, valores `UPPER_SNAKE` | `TicketStatus.EN_REPARACION` |
+| Rutas API | `/api/v1/[recurso]` | `PATCH /api/v1/tickets/:id/approve-report` |
+
+## Estructura de módulo Hono (patrón obligatorio)
+
+```
+/modules/[nombre]/
+  [nombre].types.ts          → Interfaces + DTOs (Zod schemas aquí)
+  [nombre].service.ts        → Interface I[Nombre]Service
+  [nombre].service.impl.ts   → Implementación
+  [nombre].router.ts         → Rutas Hono
+  handlers/
+    create-[nombre].handler.ts
+    update-[nombre].handler.ts
+```
+
+## Validación con Zod (obligatoria en todos los endpoints)
+
+```typescript
+// ✅ CORRECTO
+const CreateTicketSchema = z.object({
+  equipment_id: z.string().uuid(),
+  client_request_notes: z.string().optional(),
+})
+type CreateTicketDto = z.infer<typeof CreateTicketSchema>
+
+const body = CreateTicketSchema.safeParse(await c.req.json())
+if (!body.success) return c.json({ error: { code: 'VALIDATION_ERROR' } }, 422)
+```
+
+## Manejo de errores
+
+```typescript
+// ✅ CORRECTO
+try {
+  await ticketService.create(dto)
+} catch (e) {
+  if (e instanceof ZodError) return c.json({ error: { code: 'VALIDATION_ERROR' } }, 422)
+  throw e
+}
+
+// ❌ MAL
+} catch (e: any) { console.log(e) }
+```
+
+## Supabase — siempre tipos generados y columnas explícitas
+
+```typescript
+import type { Database } from '@flucore/types'
+const supabase = createClient<Database>(url, key)
+
+// ✅ Columnas explícitas
+const { data } = await supabase
+  .from('tickets')
+  .select('id, ticket_number, status, equipment(serial_number)')
+
+// ❌ Nunca select *
+const { data } = await supabase.from('tickets').select('*')
+```
+
+## Decimal para precios
+
+```typescript
+import Decimal from 'decimal.js'
+const total = new Decimal(subtotal).times(new Decimal(1).plus(taxRate))
+// ❌ const total = subtotal * (1 + taxRate)
+```
+
+## Tipos compartidos — NO duplicar
+
+```typescript
+import type { Ticket, DiagnosticData, UserRole } from '@flucore/types'
+// Nunca redefinir tipos del dominio en apps/
+```

@@ -1,0 +1,91 @@
+---
+description: FluCore project context, architecture rules, and anti-patterns. Always active.
+alwaysApply: true
+---
+
+# FluCore — Reglas de Arquitectura Core
+
+**Proyecto:** FluCore — SaaS multi-tenant de gestión de servicio técnico de endoscopía para Medplan (Chile).
+**Documentos maestros:** `FLUCORE_AI_CONTEXT_v2.2.md` + `001_core_schema_1.sql` + `FLUCORE_TECH_STACK.md`
+
+## Stack (no negociable)
+
+| Capa | Tecnología |
+|------|-----------|
+| Frontend | Next.js 14+ App Router + TypeScript strict |
+| Backend | Hono (Node.js) + TypeScript strict |
+| Base de datos | PostgreSQL 15+ vía Supabase |
+| Auth | Supabase Auth + JWT con claims custom (`tenant_id`, `role`) |
+| Storage | Supabase Storage — bucket único `flucore-vault` |
+| Deploy backend | Railway.app (~$5/mes) |
+| Offline | Dexie (IndexedDB) + next-pwa — paquete `@flucore/offline` |
+| PDF | `@react-pdf/renderer` en frontend (funciona offline) |
+
+## Patrón CQRS-Lite (regla arquitectónica más importante)
+
+| Operación | Canal | Prohibido |
+|-----------|-------|-----------|
+| GET — leer datos | Supabase client desde Next.js | Pasar GETs por Hono |
+| POST/PATCH/PUT — mutar | Hono API `/api/v1/...` | Mutar directo a Supabase desde el browser |
+| Upload de archivos | Supabase Storage SDK desde el cliente | Pasar binarios por Hono |
+| Mutaciones offline | `useOfflineTicket` → IndexedDB primero | fetch() directo sin fallback offline |
+
+## Patrón Offline-First — Local-First, Sync-Second
+
+```typescript
+// ✅ SIEMPRE — local-first, nunca bloquear UI esperando red
+const { createTicket } = useOfflineTicket(getAccessToken)
+const ticket = await createTicket(input) // retorna inmediato desde IndexedDB
+
+// ❌ NUNCA — bloqueante, falla sin red
+const res = await fetch('/api/v1/tickets', { method: 'POST', ... })
+```
+
+## Dos clientes Supabase, no uno
+
+- `server.ts` → `createServerClient` con cookies — RSC, Route Handlers
+- `client.ts` → `createBrowserClient` con ANON_KEY — `'use client'`
+- Hono backend → `createClient(URL, SERVICE_ROLE_KEY)` — único lugar con service role
+
+## Seguridad — reglas críticas
+
+- `SERVICE_ROLE_KEY` NUNCA en variables `NEXT_PUBLIC_*` ni archivos `'use client'`
+- Validar permisos por `role` SIEMPRE en Hono, nunca en el frontend
+- Todo cambio de estado en tickets → insertar en `ticket_logs` (obligatorio)
+- Soft delete: `deleted_at` / `is_active = false`, nunca `DELETE` en transaccionales
+- `tenant_id` SIEMPRE del JWT, nunca del body del request
+
+## Formato de respuesta API estándar
+
+```typescript
+{ data: T, meta?: { timestamp: string; total?: number } }           // Éxito
+{ error: { code: string, message: string, status: number } }        // Error
+```
+
+## Storage paths (regla estricta)
+
+```
+{tenant_id}/{modulo}/{entidad_id}/{tipo}/{timestamp}_{filename}
+```
+Siempre usar `buildStoragePath()` de `/packages/utils/storage-path.ts`.
+
+## Anti-patrones — nunca hacer esto
+
+```
+❌ `any` en TypeScript
+❌ SERVICE_ROLE_KEY en 'use client' o NEXT_PUBLIC_
+❌ DELETE en tickets, ticket_logs, ticket_parts
+❌ Hardcodear tenant_id en código
+❌ Lógica de roles en el frontend (solo en Hono)
+❌ Binarios pasando por Hono API
+❌ Un único cliente Supabase global compartido
+❌ SELECT * en queries de producción
+❌ FOR ALL en políticas RLS
+❌ CHECK constraints referenciando otras tablas en PostgreSQL (usar triggers)
+❌ fetch() sin manejo de fallo de red en operaciones de usuario
+❌ Instalar librerías no aprobadas sin justificación
+```
+
+## Librerías aprobadas
+
+`zod` · `react-hook-form` · `@tanstack/react-query` · `date-fns` · `decimal.js` · `qrcode` · `@react-pdf/renderer` · `shadcn/ui` · `@hello-pangea/dnd` · `dexie` · `dexie-react-hooks` · `next-pwa`

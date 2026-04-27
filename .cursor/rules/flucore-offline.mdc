@@ -1,0 +1,92 @@
+---
+description: FluCore offline-first patterns — Dexie, sync queue, Local-First mutations.
+globs: **/*.ts, **/*.tsx
+alwaysApply: false
+---
+
+# FluCore — Patrones Offline-First
+
+**Paquete:** `@flucore/offline` en `/packages/offline/`  
+**Referencia:** `FLUCORE_OFFLINE_ARCH.md`
+
+## Principio: Local-First, Sync-Second
+
+```
+Acción del usuario → guardar en IndexedDB PRIMERO → sincronizar después
+                                  ↑
+                         nunca bloquear la UI esperando red
+```
+
+## Las mutaciones NUNCA bloquean la UI esperando al servidor
+
+```typescript
+// ✅ CORRECTO — local-first, retorna inmediato
+const { createTicket, updateDiagnostic, changeStatus } = useOfflineTicket(getAccessToken)
+const ticket = await createTicket(input)  // guardado en IndexedDB al instante
+
+// ❌ MAL — bloqueante, falla sin red
+const res = await fetch('/api/v1/tickets', { method: 'POST', body: ... })
+```
+
+## Inicializar el motor de sync (una sola vez en el layout protegido)
+
+```typescript
+'use client'
+import { initSyncEngine } from '@flucore/offline'
+
+useEffect(() => {
+  return initSyncEngine(getAccessToken) // retorna cleanup automático
+}, [])
+```
+
+## Lecturas — siempre desde IndexedDB con useLiveQuery
+
+```typescript
+import { useLiveQuery } from 'dexie-react-hooks'
+import { localDB } from '@flucore/offline'
+
+// ✅ CORRECTO — reactivo, funciona offline
+const tickets = useLiveQuery(
+  () => localDB.tickets.where('[tenant_id+status]').equals([tenantId, 'EN_DIAGNOSTICO']).toArray(),
+  [tenantId]
+)
+```
+
+## Ticket number provisional — manejar en la UI
+
+```typescript
+const isProvisional = ticket.ticket_number.startsWith('OFFLINE-')
+
+{isProvisional
+  ? <span>{ticket.ticket_number} <Badge variant="warning">Pendiente sync</Badge></span>
+  : <span>{ticket.ticket_number}</span>
+}
+```
+
+## Indicador de estado de sync en el header
+
+```typescript
+const { stats } = useSyncStatus(getAccessToken)
+// stats.state: 'online_synced' | 'offline_pending' | 'online_sync_error' | 'online_syncing'
+// stats.pending: número de operaciones en cola
+// Solo mostrar el indicador cuando NO está en 'online_synced'
+```
+
+## Operaciones que REQUIEREN red (mostrar mensaje claro al usuario)
+
+```
+❌ Generar informe con IA (Claude API)
+❌ Kanban Realtime (Supabase Realtime)
+❌ Login inicial (Supabase Auth)
+❌ Aprobación de cotización
+```
+
+## Anti-patrones offline
+
+```
+❌ fetch() sin manejo de fallo de red en operaciones de usuario
+❌ Mostrar loading indefinido cuando no hay red
+❌ Perder datos del usuario si la request falla
+❌ localStorage para datos estructurados (usar Dexie)
+❌ Encolar la misma operación dos veces para el mismo entity_id+operation
+```

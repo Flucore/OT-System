@@ -1,0 +1,105 @@
+---
+description: SQL and RLS standards for FluCore Supabase migrations.
+globs: **/*.sql
+alwaysApply: false
+---
+
+# FluCore — Convenciones SQL y RLS
+
+## Nomenclatura SQL
+
+| Elemento | Convención | Ejemplo |
+|----------|-----------|---------|
+| Tablas | `snake_case` plural | `ticket_logs`, `inventory_items` |
+| Columnas | `snake_case` | `tenant_id`, `created_at` |
+| Índices | `idx_{tabla}_{columna}` | `idx_tickets_tenant_status` |
+| Triggers | `trg_{tabla}_{descripcion}` | `trg_tickets_updated_at` |
+| Políticas | `"{tabla}_{operacion}"` | `"tickets_select"` |
+
+## RLS — Patrón obligatorio (NUNCA usar FOR ALL)
+
+```sql
+-- ✅ CORRECTO — granular por operación
+ALTER TABLE [tabla] ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "[tabla]_select" ON [tabla]
+  FOR SELECT USING (tenant_id = (auth.jwt() ->> 'tenant_id')::uuid);
+
+CREATE POLICY "[tabla]_insert" ON [tabla]
+  FOR INSERT WITH CHECK (tenant_id = (auth.jwt() ->> 'tenant_id')::uuid);
+
+CREATE POLICY "[tabla]_update" ON [tabla]
+  FOR UPDATE USING (tenant_id = (auth.jwt() ->> 'tenant_id')::uuid);
+
+CREATE POLICY "[tabla]_no_delete" ON [tabla]
+  FOR DELETE USING (false);
+
+-- ❌ MAL — FOR ALL no protege INSERT sin WITH CHECK
+CREATE POLICY "tenant_isolation" ON [tabla]
+  FOR ALL USING (tenant_id = (auth.jwt() ->> 'tenant_id')::uuid);
+```
+
+## Tablas con bloqueo total desde el cliente
+
+```sql
+-- ticket_logs: auditoría inmutable — solo service role puede insertar
+CREATE POLICY "ticket_logs_no_insert" ON ticket_logs FOR INSERT WITH CHECK (false);
+CREATE POLICY "ticket_logs_no_update" ON ticket_logs FOR UPDATE USING (false);
+
+-- tenants: solo el sistema crea/modifica tenants
+CREATE POLICY "tenants_no_insert" ON tenants FOR INSERT WITH CHECK (false);
+
+-- profiles: solo el backend Hono crea perfiles
+CREATE POLICY "profiles_insert_block" ON profiles FOR INSERT WITH CHECK (false);
+```
+
+## Índices JSONB
+
+```sql
+-- ✅ jsonb_path_ops — más eficiente para @> y @?
+CREATE INDEX idx_tickets_diag_gin ON tickets USING GIN (diagnostic_data jsonb_path_ops);
+
+-- ❌ Sin operador — más grande, más lento
+CREATE INDEX idx_tickets_diag_gin ON tickets USING GIN (diagnostic_data);
+```
+
+## Integridad cross-tenant — usar triggers, NO CHECK
+
+```sql
+-- ❌ MAL — PostgreSQL no admite subqueries en CHECK
+ALTER TABLE tickets ADD CONSTRAINT fk_check
+  CHECK (tenant_id = (SELECT tenant_id FROM equipment WHERE id = equipment_id));
+
+-- ✅ CORRECTO — trigger BEFORE INSERT OR UPDATE
+CREATE OR REPLACE FUNCTION validate_ticket_equipment_tenant()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM equipment WHERE id = NEW.equipment_id AND tenant_id = NEW.tenant_id
+  ) THEN
+    RAISE EXCEPTION 'equipment % no pertenece al tenant %', NEW.equipment_id, NEW.tenant_id
+      USING ERRCODE = 'foreign_key_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+## Migrations — convención de nombres
+
+```
+001_core_schema.sql          → Schema base completo + RLS
+002_jwt_hook.sql             → custom_access_token_hook
+003_offline_sync_support.sql → Soporte offline-first
+seed/001_medplan_seed.sql    → Datos iniciales (ON CONFLICT DO NOTHING)
+```
+
+## Storage RLS
+
+```sql
+CREATE POLICY "tenant_storage_isolation" ON storage.objects
+  FOR ALL USING (
+    bucket_id = 'flucore-vault'
+    AND (storage.foldername(name))[1] = (auth.jwt() ->> 'tenant_id')
+  );
+```
