@@ -1,0 +1,91 @@
+---
+description: Regla de desarrollo educativo — Vibe Coding FluCore. Aplica a TODA sesión de desarrollo: SQL, TypeScript, configuración, arquitectura.
+globs: ["**/*.sql", "**/*.ts", "**/*.tsx", "**/*.md"]
+alwaysApply: true
+---
+
+# FluCore — Regla de Desarrollo Educativo (Vibe Coding)
+
+## Propósito
+
+El desarrollo de FluCore es simultáneamente **producción de software y formación técnica**.
+Cada pieza de código debe poder ser leída y entendida por alguien sin experiencia en el stack,
+sin escribir texto innecesario ni comentarios redundantes que inflen los tokens.
+
+---
+
+## Principio de Economía Educativa
+
+**Token budget primero.** No escribir lo que el código ya dice.
+Solo explicar:
+1. **El "por qué"** — decisión de diseño no obvia
+2. **El "qué puede salir mal"** — peligros, condiciones límite
+3. **El "cómo se conecta"** — qué otra parte del sistema lo usa o lo necesita
+
+```sql
+-- ✅ CORRECTO — explica el por qué, no el qué
+-- Sin este GRANT, supabase_auth_admin no puede invocar el hook
+-- y auth.jwt() ->> 'tenant_id' devuelve NULL en todas las RLS.
+GRANT EXECUTE ON FUNCTION custom_access_token_hook TO supabase_auth_admin;
+
+-- ❌ MAL — narra lo obvio, desperdicia tokens
+-- Aquí otorgamos permisos de ejecución al rol supabase_auth_admin
+-- sobre la función custom_access_token_hook.
+GRANT EXECUTE ON FUNCTION custom_access_token_hook TO supabase_auth_admin;
+```
+
+---
+
+## Al Terminar Cada Bloque de Código
+
+Agregar una sección `## Guía Técnica` al final de la respuesta con:
+
+```
+## Guía Técnica — [Nombre del archivo/componente]
+
+**Qué hace:** 1 oración.
+**Por qué existe:** El problema que resuelve en el contexto de FluCore.
+**Dónde se conecta:** Quién lo llama, qué depende de él.
+**Puntos críticos:** Máximo 3 bullets — los errores más comunes o gotchas.
+**Cómo verificarlo:** Comando o paso manual para confirmar que funciona.
+```
+
+Mantener la guía bajo **150 palabras**. No repetir lo que el código ya dice.
+
+---
+
+## Prompt de Integración para Nuevas Sesiones
+
+Cuando el usuario abra una nueva sesión de desarrollo, si la tarea es implementar
+un módulo, endpoint, componente o migración, usar este formato de prompt interno:
+
+```
+[CONTEXTO] Lee FLUCORE_AI_CONTEXT_v2.2.md sección [X].
+[TAREA] Implementa [descripción precisa].
+[REGLAS] Aplica flucore-core.mdc + flucore-sql.mdc (según aplique).
+[EDUCATIVO] Al final, incluye Guía Técnica según flucore-learn.mdc.
+[VERIFICACIÓN] Indica el paso mínimo para confirmar que funciona.
+```
+
+---
+
+## Anti-patrones Educativos
+
+```
+❌ Párrafos largos narrando cada línea de código
+❌ Repetir lo que ya dice el comentario en la guía
+❌ "Como puedes ver en el código..." — si ya está, no explicarlo
+❌ Guías de más de 200 palabras
+❌ Explicar conceptos generales de SQL/TypeScript no específicos de FluCore
+✅ Una metáfora útil si simplifica radicalmente una idea compleja
+✅ Señalar exactamente en qué línea y por qué puede fallar algo
+✅ Enlazar con el flujo de estados o la arquitectura del contexto
+```
+
+---
+
+## Nivel de Audiencia
+
+- **Sabe:** programar, usar terminal, entender SQL básico
+- **No sabe (aún):** multi-tenancy, RLS, JWT custom claims, CQRS-Lite, Dexie/IndexedDB
+- **Meta:** después de 2 semanas de desarrollo, entender el sistema completo sin ayuda
