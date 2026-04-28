@@ -8,10 +8,11 @@ export { enqueue, getPendingItems, getFailedItems, retryFailed, cleanCompleted }
 export { initSyncEngine, processQueue, onSyncStats } from './sync-engine'
 export { useNetworkStatus } from './hooks/use-network-status'
 export { useSyncStatus } from './hooks/use-sync-status'
-export { useOfflineTicket } from './hooks/use-offline-ticket'
+export { useOfflineTicket, BusinessError } from './hooks/use-offline-ticket'
 
+export type { SyncEngineOptions } from './sync-engine'
 export type {
-  LocalTicket, LocalEquipment, SyncQueueItem, SyncOperation,
+  LocalTicket, LocalEquipment, LocalFile, SyncQueueItem, SyncOperation,
   SyncStatus, SyncUIState, SyncStats, CachedProfile, CachedDeviceModel,
   CachedClient, CachedBranch, TicketStatus, UserRole,
 } from './types'

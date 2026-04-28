@@ -18,7 +18,7 @@ export type SyncOperation =
   | 'CHANGE_TICKET_STATUS'
   | 'CREATE_EQUIPMENT'
   | 'UPDATE_OT_PROGRESS'
-  | 'UPLOAD_PHOTO_METADATA'
+  | 'UPLOAD_PHOTO'        // sube Blob a Storage + registra metadata en Hono
 
 export type SyncQueueItemStatus = 'pending' | 'syncing' | 'failed' | 'completed'
 
@@ -109,10 +109,19 @@ export interface CachedBranch {
 // Cola de sincronización
 // --------------------------------------------------
 
+// Archivo binario guardado localmente hasta poder subir a Supabase Storage
+export interface LocalFile {
+  id: string           // UUID = también es el entity_id en la cola de sync
+  storagePath: string  // path final en flucore-vault ({tenant_id}/tickets/...)
+  blob: Blob           // Dexie v4 almacena Blobs nativamente en IndexedDB
+  mimeType: string
+  created_at: string
+}
+
 export interface SyncQueueItem {
   id: string                     // UUID local de la operación
   operation: SyncOperation
-  entity_type: 'ticket' | 'equipment' | 'ot_progress'
+  entity_type: 'ticket' | 'equipment' | 'ot_progress' | 'photo'
   entity_id: string
   payload: unknown
   http_method: 'POST' | 'PATCH' | 'PUT'

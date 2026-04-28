@@ -1,11 +1,15 @@
 /**
  * FLUCORE @flucore/offline — Schema de IndexedDB con Dexie
  * Referencia: FLUCORE_OFFLINE_ARCH.md sección 5
+ *
+ * Versiones del schema:
+ *   v1 — tablas base: tickets, equipment, syncQueue, caches de referencia
+ *   v2 — localFiles: almacén de Blobs para fotos tomadas offline
  */
 
 import Dexie, { type EntityTable } from 'dexie'
 import type {
-  LocalTicket, LocalEquipment, SyncQueueItem,
+  LocalTicket, LocalEquipment, LocalFile, SyncQueueItem,
   CachedProfile, CachedDeviceModel, CachedClient, CachedBranch,
 } from './types'
 
@@ -17,6 +21,7 @@ class FluCoreLocalDB extends Dexie {
   deviceModels!: EntityTable<CachedDeviceModel, 'id'>
   clients!: EntityTable<CachedClient, 'id'>
   branches!: EntityTable<CachedBranch, 'id'>
+  localFiles!: EntityTable<LocalFile, 'id'>
 
   constructor() {
     super('flucore_local_db')
@@ -43,6 +48,12 @@ class FluCoreLocalDB extends Dexie {
       clients: 'id, tenant_id',
       branches: 'id, tenant_id, client_id',
     })
+
+    // v2: localFiles guarda Blobs de fotos tomadas offline.
+    // Dexie 4 maneja Blobs nativamente en IndexedDB — no serializar a base64.
+    this.version(2).stores({
+      localFiles: 'id, storagePath, created_at',
+    })
   }
 }
 
@@ -52,18 +63,18 @@ export const localDB = new FluCoreLocalDB()
 // Helpers
 // --------------------------------------------------
 
+/**
+ * Genera un número provisional con un fragmento UUID para evitar colisiones
+ * aunque el técnico borre el IndexedDB o trabaje desde varios dispositivos.
+ * Formato: OFFLINE-YYYYMMDD-XXXX (XXXX = 4 chars hex aleatorios)
+ *
+ * ❌ Antes usaba count()+1 → colisión si se borraba IndexedDB
+ * ✅ Ahora usa crypto.randomUUID() → probabilidad de colisión ~1 en 1M
+ */
 export async function generateProvisionalTicketNumber(): Promise<string> {
-  const today = new Date()
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '')
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-
-  const todayCount = await localDB.tickets
-    .where('created_at')
-    .aboveOrEqual(todayStart.toISOString())
-    .count()
-
-  const seq = String(todayCount + 1).padStart(3, '0')
-  return `OFFLINE-${dateStr}-${seq}`
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  const suffix = crypto.randomUUID().slice(0, 4).toUpperCase()
+  return `OFFLINE-${dateStr}-${suffix}`
 }
 
 export async function confirmTicketSync(

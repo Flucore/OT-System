@@ -6,7 +6,9 @@
  * Orden de operación para cada mutación:
  * 1. Guardar en IndexedDB SIEMPRE (inmediato, sin importar red)
  * 2. Si hay red: intentar sync inmediato al backend Hono
- * 3. Si no hay red o falla: encolar para sync posterior automático
+ *    - HTTP 4xx (validación/negocio) → lanzar error a la UI, NO encolar
+ *    - Error de red o HTTP 5xx → enqueue para reintento automático
+ * 3. Si no hay red: encolar para sync posterior automático
  */
 
 import { useCallback } from 'react'
@@ -16,6 +18,38 @@ import { useNetworkStatus } from './use-network-status'
 import type { LocalTicket, TicketStatus } from '../types'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8787'
+
+// Error de negocio/validación — el servidor lo rechazó explícitamente.
+// NO debe encolarse: reintentarlo producirá el mismo 4xx infinitamente.
+export class BusinessError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'BusinessError'
+  }
+}
+
+// Helper: distingue "la red no existe" de "el servidor respondió con error"
+function isNetworkError(e: unknown): boolean {
+  return e instanceof TypeError && /fetch|network|failed/i.test((e as TypeError).message)
+}
+
+// Ejecuta fetch + lanza BusinessError si 4xx, devuelve Response si ok/5xx
+async function fetchWithBusinessErrorGuard(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  const res = await fetch(url, init)
+
+  if (res.status >= 400 && res.status < 500) {
+    const body = await res.json().catch(() => ({})) as { error?: { message?: string } }
+    throw new BusinessError(res.status, body?.error?.message ?? `Error ${res.status}`)
+  }
+
+  return res
+}
 
 interface CreateTicketInput {
   equipment_id: string
@@ -35,6 +69,14 @@ interface ChangeStatusInput {
   ticketId: string
   newStatus: TicketStatus
   notes?: string
+}
+
+interface UploadPhotoInput {
+  ticketId: string
+  tenantId: string
+  phase: 'DIAGNOSTICO' | 'REPARACION'
+  storagePath: string  // construido con buildStoragePath() antes de llamar al hook
+  blob: Blob
 }
 
 export function useOfflineTicket(getAccessToken: () => Promise<string | null>) {
@@ -76,7 +118,7 @@ export function useOfflineTicket(getAccessToken: () => Promise<string | null>) {
     if (isOnline) {
       try {
         const token = await getAccessToken()
-        const res = await fetch(`${API_BASE}/api/v1/tickets`, {
+        const res = await fetchWithBusinessErrorGuard(`${API_BASE}/api/v1/tickets`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify(localTicket),
@@ -90,7 +132,12 @@ export function useOfflineTicket(getAccessToken: () => Promise<string | null>) {
           })
           return { ...localTicket, ticket_number: data.ticket_number, _provisional: false, sync_status: 'synced' }
         }
-      } catch { /* fallback a cola */ }
+        // 5xx → fallback a cola
+      } catch (e) {
+        if (e instanceof BusinessError) throw e  // 4xx: re-lanzar a la UI
+        if (!isNetworkError(e)) throw e          // error inesperado: re-lanzar
+        // TypeError de red → fallback a cola
+      }
     }
 
     await enqueue({
@@ -118,16 +165,22 @@ export function useOfflineTicket(getAccessToken: () => Promise<string | null>) {
     if (isOnline) {
       try {
         const token = await getAccessToken()
-        const res = await fetch(`${API_BASE}/api/v1/tickets/${input.ticketId}/diagnostic`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ diagnostic_data: input.diagnostic_data, _client_updated_at: now }),
-        })
+        const res = await fetchWithBusinessErrorGuard(
+          `${API_BASE}/api/v1/tickets/${input.ticketId}/diagnostic`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ diagnostic_data: input.diagnostic_data, _client_updated_at: now }),
+          }
+        )
         if (res.ok) {
           await localDB.tickets.update(input.ticketId, { sync_status: 'synced' })
           return
         }
-      } catch { /* fallback a cola */ }
+      } catch (e) {
+        if (e instanceof BusinessError) throw e
+        if (!isNetworkError(e)) throw e
+      }
     }
 
     await enqueue({
@@ -155,16 +208,22 @@ export function useOfflineTicket(getAccessToken: () => Promise<string | null>) {
     if (isOnline) {
       try {
         const token = await getAccessToken()
-        const res = await fetch(`${API_BASE}/api/v1/tickets/${input.ticketId}/status`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ status: input.newStatus, notes: input.notes, _client_updated_at: now }),
-        })
+        const res = await fetchWithBusinessErrorGuard(
+          `${API_BASE}/api/v1/tickets/${input.ticketId}/status`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ status: input.newStatus, notes: input.notes, _client_updated_at: now }),
+          }
+        )
         if (res.ok) {
           await localDB.tickets.update(input.ticketId, { sync_status: 'synced' })
           return
         }
-      } catch { /* fallback a cola */ }
+      } catch (e) {
+        if (e instanceof BusinessError) throw e
+        if (!isNetworkError(e)) throw e
+      }
     }
 
     await enqueue({
@@ -177,7 +236,41 @@ export function useOfflineTicket(getAccessToken: () => Promise<string | null>) {
     })
   }, [isOnline, getAccessToken])
 
-  return { createTicket, updateDiagnostic, changeStatus }
+  /**
+   * uploadPhoto — guarda un Blob localmente y lo encola para subir a Supabase Storage.
+   * El sync-engine lo sube cuando haya red usando el `uploadBlob` que el app provee.
+   * El storagePath DEBE construirse con buildStoragePath() antes de llamar esta función.
+   */
+  const uploadPhoto = useCallback(async (input: UploadPhotoInput): Promise<string> => {
+    const operationId = crypto.randomUUID()
+
+    await localDB.localFiles.add({
+      id: operationId,
+      storagePath: input.storagePath,
+      blob: input.blob,
+      mimeType: input.blob.type,
+      created_at: new Date().toISOString(),
+    })
+
+    await enqueue({
+      operation: 'UPLOAD_PHOTO',
+      entity_type: 'photo',
+      entity_id: operationId,
+      payload: {
+        localFileId: operationId,
+        storagePath: input.storagePath,
+        ticketId: input.ticketId,
+        tenantId: input.tenantId,
+        phase: input.phase,
+      },
+      http_method: 'POST',
+      endpoint: '/api/v1/tickets/:ticket_id/photos',
+    })
+
+    return operationId
+  }, [])
+
+  return { createTicket, updateDiagnostic, changeStatus, uploadPhoto }
 }
 
 function statusDateField(status: TicketStatus): string | null {
