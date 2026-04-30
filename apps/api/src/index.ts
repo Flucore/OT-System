@@ -7,6 +7,7 @@ import type { HonoVariables } from './types/hono.types'
 import { authMiddleware } from './middleware/auth.middleware'
 import { errorMiddleware } from './middleware/error.middleware'
 import { supabaseAdmin } from './lib/supabase-admin'
+import { iamRouter } from './modules/iam/iam.router'
 
 const app = new Hono<{ Variables: HonoVariables }>()
 
@@ -34,6 +35,8 @@ app.get('/health', (c) =>
 // ── Rutas protegidas (/api/v1/*) ──────────────────────────────────────────────
 
 app.get('/api/v1', (c) => c.json({ message: 'FluCore API v1', status: 'ok' }))
+
+app.route('/api/v1/profiles', iamRouter)
 
 // Devuelve el perfil del usuario autenticado.
 // Requiere que exista una fila en profiles con el id del JWT.
@@ -74,6 +77,7 @@ serve(
     console.log(`[flucore-api] Servidor corriendo en http://localhost:${port}`)
     console.log(`[flucore-api] GET /health → OK`)
     console.log(`[flucore-api] GET /api/v1/me → requiere Bearer token`)
+    console.log(`[flucore-api] GET /api/v1/profiles → IAM module activo`)
     console.log(`[flucore-api] NODE_ENV: ${process.env['NODE_ENV'] ?? 'development'}`)
   }
 )

@@ -170,12 +170,14 @@ rg "FOR ALL" supabase/           # Debe dar 0 resultados
 *(Actualizar al cierre de cada sesión)*
 
 ```
-Última actualización: 2026-04-26 (sesión 3 — recuperación)
-Último commit: PENDIENTE — hacer commit ahora
-Versión actual: v0.0.2 (documentación completa)
+Última actualización: 2026-04-29 (sesión 5 — IAM + Auth backend completos)
+Último commit: feat(iam): iam module with profiles CRUD
+Versión actual: v0.1.4 (Auth completo: JWT hook, Hono middleware, IAM)
 
 Estado por módulo:
   [✅] Schema DB: 001_core_schema_1.sql — RLS granular, índices, triggers
+  [✅] Migración offline: 003_offline_sync_support.sql — ejecutada en Supabase
+  [✅] Migración auth hook: 002_auth_hook.sql — ejecutada en Supabase
   [✅] Cursor Rules: 4 reglas activas (core, typescript, sql, offline)
   [✅] FLUCORE_AI_CONTEXT_v2.2.md: Actualizado a v2.3 con offline-first
   [✅] FLUCORE_TECH_STACK.md: Decisiones offline + Railway + PDF tomadas
@@ -183,20 +185,27 @@ Estado por módulo:
   [✅] FLUCORE_VIBE_PROTOCOL.md: Protocolo de sesión completo
   [✅] FLUCORE_OFFLINE_ARCH.md: Arquitectura offline-first completa
   [✅] packages/offline/: @flucore/offline paquete completo
-  [⚠️] supabase/migrations/003_offline_sync_support.sql: Creado, pendiente ejecutar
-  [⏳] Supabase proyecto: Pendiente crear y ejecutar migraciones
-  [⏳] JWT Hook: Pendiente configurar
-  [⏳] Monorepo flucore/: Pendiente inicializar (Sprint 1 Día 1)
-  [⏳] Auth Hono + Next.js: Pendiente
-  [⏳] IAM: Pendiente
-  [⏳] Tickets/FUI: Pendiente
-  [⏳] Checklist 39 puntos: Pendiente
-  [⏳] IA Informes: Pendiente
-  [⏳] Kanban: Pendiente
+  [✅] Supabase proyecto: lihqpfbhzlsjzhoyulbb — RLS activo, 12 tablas
+  [✅] JWT Hook: custom_access_token_hook activo en Dashboard
+  [✅] Storage: bucket flucore-vault (PRIVATE) creado
+  [✅] Monorepo flucore/: apps/web + apps/api + packages/* compilando
+  [✅] Auth Hono: authMiddleware + errorMiddleware + supabaseAdmin
+  [✅] IAM backend: módulo profiles CRUD completo (5 endpoints)
+  [✅] apps/web/lib/supabase/: client.ts + server.ts + middleware.ts
+  [✅] apps/web/middleware.ts: redirección auth + rutas públicas
+  [⏳] Auth frontend: login page + callback (Día 3)
+  [⏳] Seed Medplan: 004_medplan_seed.sql + admin panel (Día 4)
+  [⏳] Equipment + Clients (Día 5)
+  [⏳] Tickets/FUI backend (Día 6)
+  [⏳] FUI offline-first frontend (Día 7)
+  [⏳] Checklist 39 puntos (Día 8)
+  [⏳] IA Informes + PDF (Día 9)
+  [⏳] Kanban + TV + Tests (Día 10)
 
 Próxima sesión:
-  PRIMERO: git add -A && git commit -m "config: restore all docs and cursor rules"
-  LUEGO: Ejecutar Sprint 1 Día 1 (Supabase + Monorepo base)
+  PRIMERO: git log -1 → ver dónde quedé
+  LUEGO: Ejecutar Prompt #5 (Next.js login + layout protegido + offline init)
+  TEST: npm run dev:web → http://localhost:3000/login → form visible
 ```
 
 ---

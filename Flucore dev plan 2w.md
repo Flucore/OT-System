@@ -25,8 +25,8 @@
 | Paquete `@flucore/offline` (Dexie + sync engine + hooks) | ✅ Listo | `/packages/offline/src/` |
 | Documentos maestros (5 .md) | ✅ Listos | `/FLUCORE_*.md` |
 | Reglas Cursor (core, ts, sql, offline) | ✅ Listas | `/.cursor/rules/*.mdc` |
-| Monorepo `/apps/*` y `/packages/types`, `/packages/utils` | 🔲 Pendiente | Día 1 |
-| Proyecto Supabase + JWT hook | 🔲 Pendiente | Día 0 (manual) |
+| Monorepo `/apps/*` y `/packages/types`, `/packages/utils` | ✅ Listo | `/apps/web`, `/apps/api`, `/packages/*` |
+| Proyecto Supabase + JWT hook | ✅ Listo | `lihqpfbhzlsjzhoyulbb` — hook activo |
 
 **No regenerar archivos existentes. Si algún prompt parece pisarlos, detenerse y preguntar.**
 
