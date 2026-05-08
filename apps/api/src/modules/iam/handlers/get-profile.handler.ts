@@ -25,6 +25,8 @@ export const getByIdHandler: MiddlewareHandler<{ Variables: HonoVariables }> = a
   }
 
   const id = c.req.param('id')
+  if (!id) return c.json(err('VALIDATION_ERROR', 'ID requerido', 400), 400)
+
   try {
     const profile = await iamService.getById(id, user.tenant_id)
     return c.json(ok(profile))

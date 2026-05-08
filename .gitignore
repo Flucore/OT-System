@@ -74,6 +74,10 @@ web_modules/
 apps/web/.env.local
 apps/api/.env
 
+# OS / IDE ruido
+.DS_Store
+Thumbs.db
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache

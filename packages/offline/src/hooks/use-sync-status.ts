@@ -24,11 +24,11 @@ export function useSyncStatus(getAccessToken: () => Promise<string | null>) {
   const retryAll = useCallback(async () => {
     const failed = await getFailedItems()
     await Promise.all(failed.map((item) => retryFailed(item.id)))
-    await processQueue(getAccessToken)
+    await processQueue({ getAccessToken })
   }, [getAccessToken])
 
   const syncNow = useCallback(async () => {
-    await processQueue(getAccessToken)
+    await processQueue({ getAccessToken })
   }, [getAccessToken])
 
   return { stats, retryAll, syncNow }

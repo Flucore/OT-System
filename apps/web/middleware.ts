@@ -2,10 +2,23 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
 // Rutas que NO requieren autenticación
-const PUBLIC_ROUTES = ['/login', '/auth/callback', '/display']
+const PUBLIC_ROUTES = ['/login', '/auth/callback', '/reset-password', '/display']
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl
+  const { pathname, searchParams } = request.nextUrl
+
+  // Supabase envía el code a la raíz (/?) — redirigir a /auth/callback para el PKCE exchange.
+  // Ocurre en password reset, magic link e invitaciones.
+  if (pathname === '/' && searchParams.has('code')) {
+    const callbackUrl = new URL('/auth/callback', request.url)
+    callbackUrl.searchParams.set('code', searchParams.get('code')!)
+    // Preservar type (recovery, invite, magiclink) para que el callback sepa a dónde redirigir
+    const type = searchParams.get('type')
+    if (type) callbackUrl.searchParams.set('type', type)
+    const next = searchParams.get('next')
+    if (next) callbackUrl.searchParams.set('next', next)
+    return NextResponse.redirect(callbackUrl)
+  }
 
   // Permitir rutas públicas sin verificar sesión
   if (PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) {

@@ -9,6 +9,7 @@ import { UpdateProfileSchema, IamError } from '../iam.types'
 export const updateProfileHandler: MiddlewareHandler<{ Variables: HonoVariables }> = async (c) => {
   const user = c.get('user')
   const id = c.req.param('id')
+  if (!id) return c.json(err('VALIDATION_ERROR', 'ID requerido', 400), 400)
 
   // Admin edita cualquier perfil del tenant. Otros solo el propio.
   if (user.role !== 'admin' && user.id !== id) {

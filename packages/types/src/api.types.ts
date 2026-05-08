@@ -33,8 +33,11 @@ export type ApiErrorCode =
   | 'CONFLICT'
   | 'UNHANDLED'
 
+// Los llamadores solo pasan total/page/page_size — timestamp lo agrega ok() internamente
+type MetaInput = Omit<NonNullable<ApiSuccess<unknown>['meta']>, 'timestamp'>
+
 // Helper para construir respuestas exitosas
-export function ok<T>(data: T, meta?: ApiSuccess<T>['meta']): ApiSuccess<T> {
+export function ok<T>(data: T, meta?: MetaInput): ApiSuccess<T> {
   return {
     data,
     meta: {

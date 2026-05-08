@@ -20,7 +20,7 @@ import {
   getPendingItems, markAsSyncing, markAsCompleted,
   markAsPendingWithBackoff, markAsFailed,
 } from './sync-queue'
-import type { SyncQueueItem, SyncStats, SyncUIState } from './types'
+import type { SyncQueueItem, SyncStats, SyncUIState, TicketStatus } from './types'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8787'
 const SYNC_DEBOUNCE_MS = 2_000
@@ -224,7 +224,7 @@ async function applyServerResponse(
     await confirmTicketSync(item.entity_id, data as { id: string; ticket_number: string })
   } else if (item.operation === 'CHANGE_TICKET_STATUS') {
     await localDB.tickets.update(item.entity_id, {
-      status: (data as { status: string }).status,
+      status: (data as { status: TicketStatus }).status,
       sync_status: 'synced',
       _client_updated_at: new Date().toISOString(),
     })

@@ -1,6 +1,6 @@
 {
   "name": "flucore",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\"",
     "dev:web": "npm run dev --workspace=apps/web",
+    "reset:web": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/reset-next-dev.ps1",
+    "dev:web:reset": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/reset-next-dev.ps1 -Start",
     "dev:api": "npm run dev --workspace=apps/api",
     "build": "npm run build --workspaces",
     "typecheck": "npm run typecheck --workspaces --if-present",
